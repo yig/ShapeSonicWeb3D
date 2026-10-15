@@ -111,6 +111,14 @@ await cam.waitForTimeout(6000);
 check(/fps/.test(await cam.textContent('#trackingStatus')), `webcam tracking runs: "${await cam.textContent('#trackingStatus')}"`);
 check(await cam.evaluate(() => window.shapesonic.sonifier.ready), 'audio started');
 await cam.click('#menuButton');
+// Sound keeps playing with the menu open, and the video fits beside the menu.
+await cam.waitForTimeout(300);
+check((await cam.evaluate(() => window.shapesonic.sonifier.master.gain.value)) > 0.5, 'the menu does not mute the sound');
+const fit = await cam.evaluate(() => {
+  const v = document.getElementById('canvas').getBoundingClientRect(), m = document.getElementById('menu').getBoundingClientRect();
+  return { right: v.right, menuLeft: m.left };
+});
+check(fit.right <= fit.menuLeft + 1, `the camera view fits beside the open menu (view right ${fit.right.toFixed(0)}, menu left ${fit.menuLeft.toFixed(0)})`);
 await cam.click('#calibrationDetails summary');
 check((await cam.locator('.webhands-calibration').count()) === 1, 'the calibration panel is in the menu');
 await shot(cam, 'camera-menu');

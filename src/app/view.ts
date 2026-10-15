@@ -203,6 +203,8 @@ export class View {
     this.video.style.transform = this.mirrored ? 'scaleX(-1)' : '';
     this.video.hidden = !(this.mode === 'camera' && this.videoActive);
     this.scene.background = overVideo ? null : this.colors.background;
+    // Letterbox bars around the video are dark, like a video player's, rather than UI-coloured.
+    this.stage.classList.toggle('video', overVideo);
     this.orbitOnly.visible = this.mode === 'orbit';
     if (!this.inXR) this.renderer.setSize(Math.max(1, w), Math.max(1, h), false);
     this.edgeMaterial.resolution.set(w, h);

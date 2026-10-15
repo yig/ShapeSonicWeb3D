@@ -559,11 +559,12 @@ function setMenuOpen(open: boolean) {
   state.menuOpen = open;
   $('menu').hidden = !open;
   $('menuButton').setAttribute('aria-expanded', String(open));
-  // Silence while the menu is open (tracking keeps running, e.g. for calibration).
-  sonifier.setMuted(open);
+  // On wide screens the stage moves aside, so the whole video stays visible (e.g. while calibrating).
+  document.body.classList.toggle('menu-open', open);
   if (open) {
     renderShapeStatus();
     renderAudioStatus();
+    refreshCameraDetails();
     $('closeMenu').focus();
   } else $('menuButton').focus();
 }

@@ -59,7 +59,6 @@ export class Sonifier {
   private buffers: { edge: AudioBuffer[]; corner: AudioBuffer[] } | null = null;
   private lastPluck = { edge: [-Infinity, -Infinity], corner: [-Infinity, -Infinity] };
   private volume = 0.8;
-  private muted = false;
   /** The last levels set, for tests and the debug readout. */
   levels: HandLevels[] = [];
 
@@ -92,7 +91,7 @@ export class Sonifier {
     await resumed;
 
     this.master = ctx.createGain();
-    this.master.gain.value = this.muted ? 0 : this.volume;
+    this.master.gain.value = this.volume;
     this.master.connect(ctx.destination);
     const gain = (dest: AudioNode) => {
       const g = ctx.createGain();
@@ -131,17 +130,7 @@ export class Sonifier {
 
   setVolume(v: number) {
     this.volume = v;
-    this.applyMaster();
-  }
-
-  /** Mute (e.g. while the menu is open) without losing the volume setting. */
-  setMuted(muted: boolean) {
-    this.muted = muted;
-    this.applyMaster();
-  }
-
-  private applyMaster() {
-    if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime, 0.02);
+    if (this.master && this.ctx) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.02);
   }
 
   update(levels: HandLevels[]) {

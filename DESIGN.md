@@ -307,9 +307,12 @@ a slow phone (✕ in the menu) when responsiveness matters more.
 - **Top bar**: Menu, Show shape (also the S key), Place at hands (P), and a
   tracking status: which hands are in view and the tracker's frame rate (for
   the mouse, the plane offset). It never names the shape.
-- **Menu** (a side panel, so the camera view stays visible during
-  calibration; M opens it, Esc closes it). Opening it mutes the sound, but
-  tracking keeps running.
+- **Menu** (a side panel; M opens it, Esc closes it). Sound and tracking keep
+  running while it is open, so settings such as the edge range or the volume
+  can be tried out by ear, and calibration sees the hands. On screens at least
+  760 px wide the stage shrinks to the space left of the menu, so the whole
+  camera view stays visible (e.g. while calibrating); on narrower screens the
+  menu covers it.
   - Shape: the demo models, each a button. The current one is checked, which,
     with the status line, is the only place its name appears. **Load model…**
     takes OBJ, STL, PLY, GLB or glTF. A size slider (default 30 cm, see below),
@@ -330,7 +333,9 @@ a slow phone (✕ in the menu) when responsiveness matters more.
     intrinsics. The canvas is placed exactly over the video's displayed image
     (`object-fit: contain`, which the calibration panel's corner picking also
     expects), and both are mirrored with CSS, so the drawn hands sit on the
-    real ones like a mirror.
+    real ones like a mirror. The video is never cropped: when the window's
+    shape differs from the camera's (usually 16:9), the leftover space is
+    letterboxed in black, like a video player.
   - *Orbit*: a free view (OrbitControls) starting over the user's shoulder,
     with the webcam's frustum and a floor grid for reference.
   - *Headset*: three.js renders the same scene into the XR session.
