@@ -4,9 +4,10 @@ A browser app of ShapeSonic (Huang, Hanocka, Siu, Gingold, SIGGRAPH Asia 2023;
 `../paper/main.tex`). An invisible 3D shape floats in front of the user. Their
 hands are tracked in 3D, in metres, with webhands
 ([`@ygingold/webhands3d`](https://www.npmjs.com/package/@ygingold/webhands3d),
-<https://github.com/yig/webhands3d/>): from an ordinary
-webcam, or from a headset's own hand tracking through WebXR (the paper's
-setup was a Meta Quest). Each fingertip is probed against the shape, and the
+<https://github.com/yig/webhands3d/>): from an ordinary webcam, optionally
+joined by more cameras and phones that triangulate the hands together, or from
+a headset's own hand tracking through WebXR (the paper's setup was a Meta
+Quest). Each fingertip is probed against the shape, and the
 user hears the paper's guidance, contact, edge and corner sounds. The iOS app
 (`../demo-iOS`, `../demo-iOS/DESIGN.md`) is the reference for the geometry
 (this is a TypeScript port of its C++ core). The 2D web demo (`../demo`) is the
@@ -28,6 +29,10 @@ hand, no camera needed), or **Start in headset** (shown only where immersive
 WebXR is available). Use headphones: the left hand plays in the left ear.
 Camera access and WebXR need a secure context: localhost or HTTPS.
 
+To add a phone as a camera, run `npm run dev:lan` (phones need HTTPS for their
+camera), open Menu → Hands → *Add a phone as a camera* on the computer, and
+scan the QR code with the phone. Both devices need internet access (PeerJS).
+
 URL parameters, for demos and tests:
 
 | Parameter | Effect |
@@ -45,7 +50,8 @@ checkout of webhands, `npm link` it, or point the dependency at
 ## Files
 
 ```
-index.html               page: stage (video + canvas), top bar, menu, start overlay
+index.html               page: stage (video + canvas), camera thumbnails, top bar, menu, start overlay
+phone.html               the phone's page when it joins as a camera (webhands' mountRemoteCamera)
 src/style.css            layout and theme tokens (light/dark)
 src/main.ts              app wiring: settings, shape loading, sources, placement, UI; hands → probe → audio
 src/sonify.ts            fingertips → per-hand levels (the paper's falloff table)
@@ -57,7 +63,8 @@ src/geometry/features.ts sharp edges, corners, and their hash grids
 src/geometry/shape.ts    Shape: mesh + octree + features, queries; synchronous build
 src/geometry/parallel.ts worker pool that builds the 64 octree subtrees in parallel
 src/geometry/sdf.worker.ts the worker
-src/app/hands.ts         hand sources: webcam (webhands monocular), WebXR (webhands), virtual mouse hand
+src/app/hands.ts         hand sources: WebXR (webhands), virtual mouse hand; tracker → world frame
+src/app/rig.ts           cameras: webhands' multi-camera tracker; main camera, more cameras, phones
 src/app/placement.ts     the shape's pose and scale in the world; default placements
 src/app/view.ts          three.js: shape, edges, corners, hands; camera / orbit / XR views
 src/app/loaders.ts       STL, PLY, glTF/GLB (three.js loaders) and OBJ → triangle soup
@@ -66,6 +73,7 @@ public/audio/            the sounds, copied from ../demo/audio
 test/                    vitest: geometry, sonification, loaders
 tools/smoke.mjs          headless Chrome end-to-end check (needs a running dev server)
 tools/bench.ts           octree build time, size and accuracy per model (Node, one thread)
+vite.config.ts           two pages; HTTPS for dev:lan; /shapesonic-info (the LAN address, for the QR code)
 ```
 
 ## Data flow
@@ -75,7 +83,7 @@ tools/bench.ts           octree build time, size and accuracy per model (Node, o
                           (loaders.ts)    weld, fit 0.4 m,          64 octree subtrees,         octree SDF,
                                           orient, normals           stitched + quantized        edges, corners
 
- webcam ─ MonocularHandTracker ─┐
+ cameras ─ MultiViewHandTracker ┐   (main camera + other cameras + phones, triangulated)
  headset ─ WebXRHandTracker ────┼─► WorldHand[] ─► onHands() ─► update()  [synchronous, per hand frame]
  mouse ─ virtualHand ───────────┘   (world frame)                 for each fingertip:
                                                                     world ─ toShape(placement) ─► build frame
@@ -87,8 +95,9 @@ tools/bench.ts           octree build time, size and accuracy per model (Node, o
 ## Coordinate frames
 
 - **Tracker frame** (webhands' convention): OpenCV camera axes, +x right, +y
-  down, +z forward, metres. For a webcam the origin is the camera; for WebXR it
-  is the headset's pose when the session started ('local' space).
+  down, +z forward, metres. For cameras the origin is the main camera (camera
+  0 of the multi-camera tracker, whose output is always in its frame); for
+  WebXR it is the headset's pose when the session started ('local' space).
 - **World frame**: three.js axes, (x, −y, −z) of the tracker frame: +y up,
   looking along −z from the origin. For WebXR this is exactly the session's
   'local' space, which three.js also renders in (`renderer.xr` uses 'local'),
@@ -213,13 +222,55 @@ The paper's mapping (supplemental Table 1), `V(x) = a + b·e^(−5x/D)` for
 - Audio starts from the start overlay's buttons, since browsers require a
   user gesture. The menu shows the output latency the browser reports.
 
-## Hands (`hands.ts`)
+## Hands (`hands.ts`, `rig.ts`)
 
 | Source | How | Notes |
 |---|---|---|
-| Webcam | webhands `MonocularHandTracker` (MediaPipe + skeleton/PnP placement), on the page's `<video>` | Needs calibration for accurate depth: the library's calibration panel is in the menu (lens from a screen pattern or a card or sheet of paper, hand size from a gripped object, bone lengths by turning the hands). It is saved per camera. Uncalibrated, depth assumes an average hand and a 66° lens. |
+| Cameras | webhands `MultiViewHandTracker` (`rig.ts`): the main camera on the page's `<video>`, plus any other local cameras and phones | See *Cameras* below. Needs calibration for accurate depth (the library's calibration panel is in the menu). Uncalibrated, depth assumes an average hand and a 66° lens. |
 | Headset | webhands `WebXRHandTracker` on the session three.js renders into (`immersive-ar` passthrough if supported, else VR; `hand-tracking` required) | No calibration. The shape and hands are drawn in the headset. Not yet tried on a real headset (the smoke test has none). |
 | Mouse | `virtualHand()`: a flat hand facing the view, middle fingertip under the pointer, on a plane through the shape's centre facing the view | Hold the left button for the right hand (Shift: left). The wheel moves the plane nearer or farther (shown in the top bar). In the orbit view, right-drag turns it. For trying the app without a camera, and for tests. |
+
+### Cameras (`rig.ts`)
+
+All camera tracking goes through webhands' multi-camera tracker, even with one
+camera, so there is one code path:
+
+- **Camera 0 is the main camera**: the one shown on the stage, whose field of
+  view the camera view uses. The tracker's output is in its frame, so it is
+  the world frame, and the shape's placement is relative to it. Choosing
+  another main camera changes the reference frame, so the rig builds a new
+  tracker with it as camera 0 and re-adds the other cameras (their positions
+  relative to the new main camera load from storage if they were calibrated
+  before). The calibration panel belongs to a tracker, so it is rebuilt too.
+- **More local cameras** (*Add camera*): each plays into a small live
+  thumbnail at the bottom left of the stage. They must stay rendered: a video
+  that is hidden or out of the document may stop delivering frames, and
+  moving it in the DOM would pause it. Removing a camera removes its
+  thumbnail.
+- **Phones** (*Add a phone as a camera*): webhands' `createRemoteCameraJoin`,
+  created the first time that section is opened, because it registers with
+  the public PeerJS server. Its QR code points to `phone.html?host=<id>`, which
+  is webhands' `mountRemoteCamera`: the phone runs MediaPipe on its own camera
+  and sends landmarks (about 2 KB per frame) directly to the computer over
+  WebRTC. In development, the page is usually on `localhost`, which a phone
+  can't open, so the dev server reports the computer's LAN address at
+  `/shapesonic-info` (a small Vite plugin, as in webhands' own demo). Phones
+  stay connected when the source changes and rejoin the next tracker.
+- **Calibration**: the panel shows the lens (per camera), hand size, bone
+  lengths, and camera positions. Camera positions: hold up one hand and move
+  it through the space the cameras share for 12 s. That gives each camera's
+  pose and clock offset relative to camera 0, and measures the bone lengths
+  by triangulation. Until a camera's position is calibrated, the tracker
+  ignores it (the menu says so, in red). Calibration is saved per camera pair
+  in `localStorage`.
+- **Fusion** (in webhands): each joint is triangulated from every calibrated
+  camera that sees the hand. When only one camera sees it, or the cameras
+  disagree, the most confident single camera's 3D is used. webhands'
+  simulations give about 0.5 mm median joint error triangulated, against
+  about 15 mm from one camera.
+- The menu lists each camera with its role, its distance from the main
+  camera once calibrated, its frame rate and how far behind its frames arrive.
+  The top bar counts the cameras in use when there is more than one.
 
 **Latency.** The webhands trackers call back once per camera frame (on the
 video's `requestVideoFrameCallback`) or per XR frame. `onHands` probes and
@@ -232,6 +283,16 @@ remains is the camera's frame
 interval and exposure, MediaPipe's inference time (one frame or more), the
 library's One Euro smoothing, and the audio output latency. Bluetooth
 headphones add 150–300 ms.
+
+With the main camera alone, its frames pass straight through the multi-camera
+tracker, at no extra cost. **With several calibrated cameras, the output
+waits for the slowest one**: each instant is fused once every active camera
+has a frame at or after it, or after that camera's usual delay (90th
+percentile of arrival − capture) plus one frame interval plus 30 ms, at most
+600 ms. Another local camera adds little. A phone runs MediaPipe and then
+sends over Wi-Fi, so its frames typically arrive 100–200 ms after capture,
+and that delay is added to the sound. Accuracy and latency trade off: remove
+a slow phone (✕ in the menu) when responsiveness matters more.
 
 ## UI (`main.ts`, `index.html`, `view.ts`)
 
@@ -252,8 +313,9 @@ headphones add 150–300 ms.
   - Edges and corners: the sharp-edge angle (re-detects at once) and the sound
     range.
   - Sound: volume, output latency.
-  - Hands: the source, the camera, the calibration panel, and an *Enter
-    headset* button.
+  - Hands: the source; for cameras, the main camera, the list of cameras
+    (with ✕ to remove), *Add camera*, *Add a phone as a camera* (QR code) and
+    the calibration panel; for the headset, an *Enter headset* button.
   - Placement: place at hands, reset, turn 90°.
 - **Views** (`view.ts`):
   - *From the camera* (default): a three.js camera at the webcam's position,
@@ -284,14 +346,14 @@ headphones add 150–300 ms.
   corners, range, camera) are remembered in `localStorage`.
 - Colours are CSS custom properties with light and dark values; the 3D view
   reads them and follows changes of the colour scheme.
-- `window.shapesonic` exposes `{state, settings, sonifier, view, ready,
+- `window.shapesonic` exposes `{state, settings, sonifier, view, rig, ready,
   setHands, virtualHand, loadDemo}` for debugging and tests.
 
 ## Tests
 
 ```sh
 npm test                               # vitest: geometry, sonification, loaders (~30 s)
-npm run dev & npm run smoke            # headless Chrome (fake camera); SHOTS=dir saves screenshots
+npm run dev & npm run smoke            # headless Chrome (2 fake cameras; PeerJS needs internet); SHOTS=dir saves screenshots
 npm run bench [-- leaf_mm models...]   # octree size, time and accuracy (one thread)
 ```
 
@@ -315,26 +377,36 @@ npm run bench [-- leaf_mm models...]   # octree size, time and accuracy (one thr
   → left levels); S shows the shape; the mouse hand exists only while the
   button is held; the menu names the shape; switching demos (cone's apex, the
   cat's 50°); loading an OBJ file; the webcam source runs MediaPipe on Chrome's
-  fake camera, audio starts, and the calibration panel is in the menu; no
-  console errors.
+  fake camera, audio starts, and the calibration panel is in the menu; a
+  second fake camera joins the multi-camera tracker, its thumbnail plays, the
+  list marks it uncalibrated, the panel offers camera-position calibration,
+  and removing it removes the camera and thumbnail; switching the main camera
+  keeps tracking; the phone join registers with PeerJS and shows a
+  `phone.html?host=` link; the phone page renders; no console errors.
 
-Not automated: real hands. The fake camera shows no hands, and there is no
-headset in CI. Manual checks: with a calibrated webcam, guidance gets louder
+Not automated: real hands. The fake cameras show no hands, so neither the
+camera-position calibration nor triangulation runs here, and no phone joins;
+there is no headset either. Manual checks: with a calibrated webcam, guidance gets louder
 toward the shape and contact plays one note per finger inside it; edges and
 corners of the cube pluck and ring; Place at hands; the drawn hands line up
-with the video; and in a Quest, the same, plus the shape drawn in passthrough.
+with the video; with a second camera or a phone, calibrate the positions and
+check that the menu shows a plausible distance between the cameras and the top
+bar counts them; and in a Quest, the same, plus the shape drawn in passthrough.
 
 ## Known limitations and possible extensions
 
-- **Monocular depth.** One webcam measures depth worst. webhands' target after
-  calibration is ±10% at arm's length (its simulations give about 2% for the
-  wrist; real hands have not been measured yet), so near the surface the
-  contact boundary can flicker with tracking noise. webhands' multi-camera
-  tracker (`MultiViewHandTracker`) triangulates from several cameras and is
-  much more accurate. Phones can join it by QR code through PeerJS
-  (`createRemoteCameraJoin`), with no server of our own. Adding it as a fourth
-  source would mean a camera list in the menu and the panel's camera-position
-  calibration step.
+- **One camera's depth.** A single webcam measures depth worst. webhands'
+  target after calibration is ±10% at arm's length (its simulations give about
+  2% for the wrist; real hands have not been measured yet), so near the
+  surface the contact boundary can flicker with tracking noise. Add a second
+  camera or a phone for triangulated hands, at the latency cost above.
+- **Cameras must overlap the main camera.** Each camera's position is
+  calibrated against camera 0, so it needs to share some view with it.
+- **The main camera can't be removed**, only switched: it defines the world
+  frame the shape is placed in.
+- **Phones need internet** for the PeerJS introduction (the public server
+  sees peer ids and network addresses, not hand data). webhands accepts
+  `peerOptions` for a self-hosted PeerServer; the app doesn't expose that.
 - **Fingertip position.** MediaPipe's fingertip landmark is at the tip of the
   finger, not the pad; contact may begin a few millimetres "early".
 - **Headset**: untested on hardware. The menu is not reachable from inside the
@@ -347,4 +419,4 @@ with the video; and in a Quest, the same, plus the shape drawn in passthrough.
   supported. A sidecar file of edges and corners would be a natural extension.
 - The 34 s loops (1.3 MB each) dominate the download; the JavaScript bundle
   (three.js, webhands, MediaPipe's wrapper) is about 270 kB gzipped, and MediaPipe's
-  WASM and model are fetched from a CDN when the webcam starts.
+  WASM and model are fetched from a CDN when the first camera starts.

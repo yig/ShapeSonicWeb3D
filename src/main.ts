@@ -1,10 +1,19 @@
 // App wiring: settings, shape loading, hand sources, placement, and the
 // hands → probe → audio path, which runs synchronously on every hand frame.
 
-import { createCalibrationPanel, listCameras, type CalibrationPanel } from '@ygingold/webhands3d';
-import { CameraHands, FINGERTIPS, virtualHand, XRHands, type WorldHand } from './app/hands';
+import {
+  createCalibrationPanel,
+  createRemoteCameraJoin,
+  listCameras,
+  type CalibrationPanel,
+  type MonocularHandTracker,
+  type MultiViewHandTracker,
+  type RemoteCameraJoin,
+} from '@ygingold/webhands3d';
+import { FINGERTIPS, virtualHand, XRHands, type WorldHand } from './app/hands';
 import { loadModelFile } from './app/loaders';
 import { defaultPlacement, toShape } from './app/placement';
+import { CameraRig } from './app/rig';
 import { View, type ViewMode } from './app/view';
 import { Sonifier } from './audio';
 import { MeshError, parseOBJ, prepareMesh, type Mesh, type TriangleSoup } from './geometry/mesh';
@@ -232,15 +241,17 @@ function renderDemoButtons() {
 
 // ---------- hand sources ----------
 
-let cameraHands: CameraHands | null = null;
-let panel: CalibrationPanel | null = null;
 const xrHands = new XRHands(onHands);
+const rig = new CameraRig(video, onHands, onCamerasChanged);
+let panel: CalibrationPanel | null = null;
+let panelTracker: MultiViewHandTracker | null = null;
+let join: RemoteCameraJoin | null = null;
 
 async function startSource(source: Source) {
   state.source = source;
   settings.source = source;
   save();
-  if (source !== 'camera') cameraHands?.stop();
+  if (source !== 'camera') rig.stop();
   if (source !== 'xr') xrHands.stop();
   onHands([]);
   view.reserveLeftButton(source === 'mouse');
@@ -254,38 +265,143 @@ async function startSource(source: Source) {
   if (source === 'xr') await startXR();
 }
 
+/** (Re)start the cameras with `deviceId` as the main camera. */
 async function startCamera(deviceId?: string) {
-  cameraHands ??= new CameraHands(video, onHands);
   toast('Opening the camera and loading hand tracking…', 'busy');
   try {
-    await cameraHands.start(deviceId);
+    await rig.startMain(deviceId);
   } catch (e) {
     if (deviceId) return startCamera(); // the remembered camera may be gone
     throw e;
   }
-  settings.deviceId = cameraHands.cameraId;
+  const main = rig.main!;
+  settings.deviceId = main.handle!.cameraId;
   save();
-  const tracker = cameraHands.tracker;
-  view.setWebcam(tracker.intrinsics, true);
-  if (!panel) {
+  const missing = (main.source as MonocularHandTracker).calibrator.status.missing;
+  toast(`${main.name} running.${missing.length ? ' Calibrate it in the menu for accurate distances.' : ''}`, 'ok');
+  await renderCameraChoices();
+}
+
+/** The main camera's field of view sets the camera view's. */
+function updateWebcamView() {
+  const main = rig.main;
+  view.setWebcam(main?.source.intrinsics ?? null, !!main);
+}
+
+/** Cameras came or went, or the tracker was replaced. */
+function onCamerasChanged() {
+  const tracker = rig.tracker;
+  if (tracker && tracker !== panelTracker) {
+    // The calibration panel belongs to a tracker: make a new one.
+    panel?.destroy();
+    panelTracker = tracker;
     panel = createCalibrationPanel($('calibration'), {
       tracker,
+      steps: ['lens', 'handSize', 'skeleton', 'positions'],
+      videoFor: (source) => rig.cameras.find((c) => c.source === source)?.video ?? null,
+      nameFor: (source, i) => (i === 0 ? 'Main camera' : rig.cameras.find((c) => c.source === source)?.name ?? `Camera ${i}`),
       mirrored: () => settings.mirror,
       banner: false,
       onStatus: (text, kind) => toast(text, kind, 6000),
     });
-    tracker.calibrator.onChange(() => view.setWebcam(tracker.intrinsics, true));
+    (rig.main?.source as MonocularHandTracker | undefined)?.calibrator.onChange(updateWebcamView);
   }
-  panel.refresh();
-  const missing = tracker.calibrator.status.missing;
-  toast(
-    missing.length ? `${cameraHands.label || 'Camera'} running. Calibrate it in the menu for accurate distances.` : `${cameraHands.label || 'Camera'} running.`,
-    'ok',
+  panel?.refresh();
+  updateWebcamView();
+  renderCameraList();
+  renderCameraChoices();
+}
+
+/** The camera list in the menu (rebuilt on changes; its details refresh every second). */
+function renderCameraList() {
+  $('cameraList').replaceChildren(
+    ...rig.cameras.map((camera) => {
+      const li = document.createElement('li');
+      const text = document.createElement('div');
+      text.className = 'text';
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = `${camera.kind === 'main' ? 'Main: ' : camera.kind === 'phone' ? 'Phone: ' : ''}${camera.name}`;
+      const detail = document.createElement('div');
+      detail.className = 'detail';
+      text.append(name, detail);
+      li.append(text);
+      if (camera.kind !== 'main') {
+        const remove = document.createElement('button');
+        remove.textContent = '✕';
+        remove.title = `Remove ${camera.name}`;
+        remove.setAttribute('aria-label', `Remove ${camera.name}`);
+        remove.addEventListener('click', () => rig.remove(camera.source));
+        li.append(remove);
+      }
+      return li;
+    }),
   );
-  const cameras = await listCameras();
+  refreshCameraDetails();
+}
+
+function refreshCameraDetails() {
+  const rows = $('cameraList').querySelectorAll<HTMLElement>('.detail');
+  rig.describe().forEach((d, i) => {
+    if (!rows[i]) return;
+    rows[i].textContent = d.text;
+    rows[i].dataset.ok = String(d.calibrated);
+  });
+}
+
+/** Main-camera choice, and the other local cameras that can be added. */
+async function renderCameraChoices() {
+  if (state.source !== 'camera') return;
+  const cameras = await listCameras().catch(() => [] as MediaDeviceInfo[]);
+  const used = new Set(rig.cameras.flatMap((c) => (c.handle ? [c.handle.cameraId] : [])));
+  const mainId = rig.main?.handle?.cameraId;
   $<HTMLSelectElement>('cameraSelect').replaceChildren(
-    ...cameras.map((c, i) => new Option(c.label || `Camera ${i + 1}`, c.deviceId, false, c.deviceId === cameraHands!.cameraId)),
+    ...cameras.map((c, i) => new Option(c.label || `Camera ${i + 1}`, c.deviceId, false, c.deviceId === mainId)),
   );
+  const free = cameras.filter((c) => !used.has(c.deviceId));
+  $<HTMLSelectElement>('extraCameraSelect').replaceChildren(
+    ...(free.length ? free.map((c, i) => new Option(c.label || `Camera ${i + 1}`, c.deviceId)) : [new Option('No other cameras', '')]),
+  );
+  $<HTMLButtonElement>('addCamera').disabled = !free.length;
+}
+
+/** Add another local camera, shown as a small live view on the stage. */
+async function addLocalCamera(deviceId: string) {
+  const figure = document.createElement('figure');
+  const thumb = document.createElement('video');
+  thumb.muted = true;
+  thumb.playsInline = true;
+  const caption = document.createElement('figcaption');
+  figure.append(thumb, caption);
+  $('thumbs').append(figure);
+  try {
+    const camera = await rig.addLocal(deviceId, thumb);
+    caption.textContent = camera.name;
+    toast(`Added ${camera.name}. Calibrate the camera positions in the menu to use it.`, 'ok', 6000);
+  } catch (e) {
+    figure.remove();
+    throw e;
+  }
+}
+
+/** Phones join through webhands' PeerJS component (made when first opened: it registers with the PeerJS server). */
+async function openPhoneJoin() {
+  if (join || !rig.tracker) return;
+  // Phones need this computer's network address, not localhost; the dev server reports it.
+  let base = new URL('.', location.href).href;
+  if (import.meta.env.DEV && ['localhost', '127.0.0.1'].includes(location.hostname)) {
+    try {
+      const info = (await (await fetch('/shapesonic-info')).json()) as { urls: string[] };
+      if (info.urls[0]) base = `${info.urls[0]}/`;
+    } catch {}
+  }
+  join = createRemoteCameraJoin($('join'), {
+    tracker: rig.tracker,
+    phonePageUrl: new URL('phone.html', base).href,
+    onStatus: (text, kind) => toast(text, kind, 6000),
+    addCamera: (camera) => rig.addPhone(camera),
+    removeCamera: (camera) => rig.remove(camera),
+  });
 }
 
 async function startXR() {
@@ -362,8 +478,12 @@ setInterval(() => {
   const hands = n ? `${n === 2 ? 'Both hands' : state.hands[0].hand === 0 ? 'Left hand' : 'Right hand'}` : 'No hands';
   if (state.source === 'mouse') {
     el.textContent = `${n ? hands : 'Hold the mouse button'} · depth ${state.mouseDepth >= 0 ? '+' : ''}${(state.mouseDepth * 100).toFixed(0)} cm`;
-  } else el.textContent = `${hands} · ${frameCount} fps`;
+  } else {
+    const n = rig.describe().filter((d) => d.calibrated).length;
+    el.textContent = `${hands} · ${frameCount} fps${n > 1 ? ` · ${n} cameras` : ''}`;
+  }
   frameCount = 0;
+  if (state.menuOpen) refreshCameraDetails();
 }, 1000);
 
 // ---------- placement ----------
@@ -540,6 +660,14 @@ $<HTMLSelectElement>('cameraSelect').addEventListener('change', (e) => {
   startCamera((e.target as HTMLSelectElement).value).catch((err) => toast(errorText(err), 'error', 8000));
 });
 $('enterXR').addEventListener('click', () => startXR());
+$('addCamera').addEventListener('click', () => {
+  const id = $<HTMLSelectElement>('extraCameraSelect').value;
+  if (id) addLocalCamera(id).catch((err) => toast(errorText(err), 'error', 8000));
+});
+$('phoneDetails').addEventListener('toggle', () => {
+  if (($('phoneDetails') as HTMLDetailsElement).open) openPhoneJoin();
+});
+navigator.mediaDevices?.addEventListener('devicechange', () => renderCameraChoices());
 
 $('menuButton').addEventListener('click', () => setMenuOpen(!state.menuOpen));
 $('closeMenu').addEventListener('click', () => setMenuOpen(false));
@@ -611,6 +739,7 @@ Object.assign(window, {
     settings,
     sonifier,
     view,
+    rig,
     ready,
     /** Feed hands directly (world frame), bypassing the tracker. */
     setHands: (hands: WorldHand[]) => onHands(hands),

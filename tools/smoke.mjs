@@ -9,7 +9,7 @@ const chrome = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/M
 const browser = await chromium.launch({
   executablePath: chrome,
   headless: true,
-  args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'],
+  args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream=device-count=2', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'],
 });
 const errors = [];
 let failures = 0;
@@ -114,7 +114,40 @@ await cam.click('#menuButton');
 await cam.click('#calibrationDetails summary');
 check((await cam.locator('.webhands-calibration').count()) === 1, 'the calibration panel is in the menu');
 await shot(cam, 'camera-menu');
+
+// A second local camera: listed, shown as a thumbnail, offered for position calibration; then removed.
+const cameras = () => cam.evaluate(() => window.shapesonic.rig.cameras.map((c) => c.kind));
+check((await cameras()).join() === 'main', 'one camera: the main one');
+await cam.click('#addCamera');
+await cam.waitForFunction(() => window.shapesonic.rig.cameras.length === 2, null, { timeout: 30000 });
+await cam.waitForTimeout(3000);
+check((await cam.evaluate(() => window.shapesonic.rig.tracker.sources.length)) === 2, 'the second camera joined the multi-camera tracker');
+check(await cam.evaluate(() => document.querySelector('#thumbs video')?.videoWidth > 0), 'its live thumbnail plays');
+check(/not calibrated/.test(await cam.textContent('#cameraList')), `the list says it needs calibrating: "${(await cam.textContent('#cameraList')).replace(/\s+/g, ' ')}"`);
+check((await cam.locator('button:has-text("Calibrate cameras (12 s)")').count()) === 1, 'the calibration panel offers camera-position calibration');
+await shot(cam, 'two-cameras');
+await cam.click('#cameraList button[aria-label^="Remove"]');
+check((await cameras()).join() === 'main' && (await cam.locator('#thumbs figure').count()) === 0, 'removing it drops the camera and its thumbnail');
+
+// Switching the main camera rebuilds the tracker.
+const other = await cam.evaluate(() => [...document.querySelectorAll('#cameraSelect option')].find((o) => !o.selected)?.value);
+await cam.selectOption('#cameraSelect', other);
+await cam.waitForFunction((id) => window.shapesonic.rig.main?.handle?.cameraId === id, other, { timeout: 30000 });
+await cam.waitForTimeout(3000);
+check(/fps/.test(await cam.textContent('#trackingStatus')), 'switching the main camera keeps tracking');
+
+// Phones: the join component (registers with the public PeerJS server, so this needs internet).
+await cam.click('#phoneDetails summary');
+await cam.waitForFunction(() => /Code |can't join/.test(document.querySelector('.webhands-join')?.shadowRoot?.textContent ?? ''), null, { timeout: 20000 }).catch(() => {});
+const joinText = await cam.evaluate(() => document.querySelector('.webhands-join')?.shadowRoot?.textContent ?? '');
+check(/Code /.test(joinText) && /phone\.html\?host=/.test(joinText), `the phone QR code is ready (${joinText.match(/Code \S+|can't join[^.]*/)?.[0] ?? 'no status'})`);
 await cam.close();
+
+// The phone page loads.
+const phone = await open('phone.html', 'phone');
+await phone.waitForTimeout(3000);
+check((await phone.locator('#remote *').count()) > 0, 'the phone page renders the remote-camera component');
+await phone.close();
 
 check(!errors.length, `no console errors${errors.length ? ':\n  ' + errors.join('\n  ') : ''}`);
 await browser.close();

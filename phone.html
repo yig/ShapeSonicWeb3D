@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>ShapeSonic camera</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+      body { margin: 0 auto; padding: 12px 16px; max-width: 640px; background: Canvas; color: CanvasText; }
+      h1 { font-size: 20px; }
+      p { font-size: 14px; opacity: 0.8; }
+    </style>
+  </head>
+  <body>
+    <h1>ShapeSonic: phone camera</h1>
+    <p>This phone sends what its camera sees of your hands to the ShapeSonic page on your computer. Stand it where it sees your hands from a different side than the computer's camera.</p>
+    <!-- The whole phone side is webhands' mountRemoteCamera component (it reads ?host= from the link). -->
+    <div id="remote"></div>
+    <script type="module">
+      import { mountRemoteCamera } from '@ygingold/webhands3d';
+      mountRemoteCamera(document.getElementById('remote'));
+    </script>
+  </body>
+</html>

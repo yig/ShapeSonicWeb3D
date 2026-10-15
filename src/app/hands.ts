@@ -1,21 +1,14 @@
 // Hand sources. Every source delivers hands in the world frame (three.js axes:
 // +y up, −z forward from the camera or headset at the origin), with 21 joints
 // in MediaPipe order:
-// * camera: webhands' MonocularHandTracker on a webcam (OpenCV camera frame,
-//   converted with (x, −y, −z));
+// * camera: webhands' multi-camera tracker (rig.ts; OpenCV camera frame of
+//   the main camera, converted with (x, −y, −z));
 // * xr: webhands' WebXRHandTracker on the session three.js renders into
 //   (WebXR 'local' space, which is already the world frame);
 // * mouse: a virtual flat hand under the pointer, for trying the app without
 //   a camera and for tests.
 
-import {
-  MonocularHandTracker,
-  NUM_JOINTS,
-  WebXRHandTracker,
-  openCamera,
-  type CameraHandle,
-  type Hand3D,
-} from '@ygingold/webhands3d';
+import { NUM_JOINTS, WebXRHandTracker, type Hand3D } from '@ygingold/webhands3d';
 
 /** Joint indices of the fingertips, thumb to little finger (= pentatonic slots C D E G A). */
 export const FINGERTIPS = [4, 8, 12, 16, 20];
@@ -39,36 +32,6 @@ export function worldHands(hands: Hand3D[]): WorldHand[] {
     }
     return { hand: h.handedness === 'Left' ? 0 : 1, joints: j };
   });
-}
-
-/** Webcam hands. Calibration (lens, hand size, bone lengths) is per camera and persists in localStorage. */
-export class CameraHands {
-  readonly tracker: MonocularHandTracker;
-  private camera: CameraHandle | null = null;
-
-  constructor(readonly video: HTMLVideoElement, listener: HandListener) {
-    this.tracker = new MonocularHandTracker({ video });
-    this.tracker.onFrame((hands, t) => listener(worldHands(hands), t));
-  }
-
-  get label() {
-    return this.camera?.label ?? '';
-  }
-  get cameraId() {
-    return this.camera?.cameraId ?? '';
-  }
-
-  async start(deviceId?: string) {
-    this.stop();
-    this.camera = await openCamera({ video: this.video, deviceId });
-    await this.tracker.start();
-  }
-
-  stop() {
-    this.tracker.stop();
-    this.camera?.stop();
-    this.camera = null;
-  }
 }
 
 /** Headset hands, from the XR session that three.js renders into. */

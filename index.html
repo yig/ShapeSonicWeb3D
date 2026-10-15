@@ -12,6 +12,7 @@
     <div id="stage">
       <video id="video" muted playsinline hidden></video>
     </div>
+    <div id="thumbs" aria-label="Other cameras"></div>
 
     <header id="topbar">
       <button id="menuButton" aria-haspopup="dialog" aria-controls="menu" title="Menu (M)">☰ Menu</button>
@@ -62,13 +63,21 @@
       <section>
         <h2>Hands</h2>
         <label class="row"><span>Tracking</span>
-          <select id="source"><option value="camera">Webcam</option><option value="mouse">Mouse (virtual hand)</option><option value="xr">Headset (WebXR)</option></select>
+          <select id="source"><option value="camera">Cameras</option><option value="mouse">Mouse (virtual hand)</option><option value="xr">Headset (WebXR)</option></select>
         </label>
         <div id="cameraControls">
-          <label class="row"><span>Camera</span><select id="cameraSelect"></select></label>
+          <label class="row"><span>Main camera</span><select id="cameraSelect"></select></label>
+          <p class="hint">The main camera is shown on screen and sets where the shape is. More cameras see your hands from other sides and make distances much more accurate.</p>
+          <ul id="cameraList" class="camera-list" aria-label="Cameras"></ul>
+          <div class="row"><select id="extraCameraSelect" aria-label="Another camera on this computer"></select><button id="addCamera">Add camera</button></div>
+          <details id="phoneDetails">
+            <summary>Add a phone as a camera</summary>
+            <p class="hint">Open the link or scan the code on the phone. Phones need this page over HTTPS (<code>npm run dev:lan</code>), and both devices need internet: the public PeerJS server introduces them, then hand data goes directly between them.</p>
+            <div id="join"></div>
+          </details>
           <details id="calibrationDetails">
-            <summary>Calibrate the camera and hands</summary>
-            <p class="hint">Calibration makes distances right. It is saved for this camera in this browser.</p>
+            <summary>Calibrate the cameras and hands</summary>
+            <p class="hint">Calibration makes distances right. It is saved for these cameras in this browser. With several cameras, calibrate their positions: hold up one hand and move it through the space they all see.</p>
             <div id="calibration"></div>
           </details>
         </div>
