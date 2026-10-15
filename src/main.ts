@@ -384,20 +384,23 @@ async function addLocalCamera(deviceId: string) {
   }
 }
 
+/**
+ * The page a phone opens from the QR code. Phones find this computer through
+ * PeerJS, so the page can be served from anywhere over HTTPS: by default
+ * webhands' published phone page, so a phone needs only internet (no local
+ * HTTPS server, certificate or shared network). A production build of this
+ * app served over HTTPS uses its own phone.html instead.
+ */
+const HOSTED_PHONE_PAGE = 'https://yig.github.io/webhands3d/remote.html';
+const phonePageUrl = () =>
+  import.meta.env.PROD && location.protocol === 'https:' ? new URL('phone.html', location.href).href : HOSTED_PHONE_PAGE;
+
 /** Phones join through webhands' PeerJS component (made when first opened: it registers with the PeerJS server). */
-async function openPhoneJoin() {
+function openPhoneJoin() {
   if (join || !rig.tracker) return;
-  // Phones need this computer's network address, not localhost; the dev server reports it.
-  let base = new URL('.', location.href).href;
-  if (import.meta.env.DEV && ['localhost', '127.0.0.1'].includes(location.hostname)) {
-    try {
-      const info = (await (await fetch('/shapesonic-info')).json()) as { urls: string[] };
-      if (info.urls[0]) base = `${info.urls[0]}/`;
-    } catch {}
-  }
   join = createRemoteCameraJoin($('join'), {
     tracker: rig.tracker,
-    phonePageUrl: new URL('phone.html', base).href,
+    phonePageUrl: phonePageUrl(),
     onStatus: (text, kind) => toast(text, kind, 6000),
     addCamera: (camera) => rig.addPhone(camera),
     removeCamera: (camera) => rig.remove(camera),

@@ -140,10 +140,24 @@ check(/fps/.test(await cam.textContent('#trackingStatus')), 'switching the main 
 await cam.click('#phoneDetails summary');
 await cam.waitForFunction(() => /Code |can't join/.test(document.querySelector('.webhands-join')?.shadowRoot?.textContent ?? ''), null, { timeout: 20000 }).catch(() => {});
 const joinText = await cam.evaluate(() => document.querySelector('.webhands-join')?.shadowRoot?.textContent ?? '');
-check(/Code /.test(joinText) && /phone\.html\?host=/.test(joinText), `the phone QR code is ready (${joinText.match(/Code \S+|can't join[^.]*/)?.[0] ?? 'no status'})`);
+check(/Code /.test(joinText) && /https:\/\/yig\.github\.io\/webhands3d\/remote\.html\?host=/.test(joinText), `the phone QR code points to the hosted phone page (${joinText.match(/Code \S+|can't join[^.]*/)?.[0] ?? 'no status'})`);
+
+// A "phone": another page opens the QR link (webhands' hosted phone page, fake camera) and joins over PeerJS.
+const link = joinText.match(/https:\/\/\S+?host=webhands3d-[0-9a-f]+/)?.[0];
+if (link) {
+  const remote = await browser.newPage();
+  remote.on('pageerror', (e) => errors.push(`hosted phone page: ${e.message}`));
+  await remote.goto(link);
+  await remote.locator('button', { hasText: 'Start & connect' }).click({ timeout: 20000 }).catch(() => {});
+  await cam.waitForFunction(() => window.shapesonic.rig.cameras.some((c) => c.kind === 'phone'), null, { timeout: 45000 }).catch(() => {});
+  await cam.waitForTimeout(3000);
+  const rows = await cam.evaluate(() => window.shapesonic.rig.describe().filter((d) => d.camera.kind === 'phone').map((d) => d.text));
+  check(rows.length === 1 && /fps/.test(rows[0]), `the phone joined through PeerJS and streams (${rows[0] ?? 'did not join'})`);
+  await remote.close();
+}
 await cam.close();
 
-// The phone page loads.
+// This app's own phone page (used when the app is deployed over HTTPS) loads.
 const phone = await open('phone.html', 'phone');
 await phone.waitForTimeout(3000);
 check((await phone.locator('#remote *').count()) > 0, 'the phone page renders the remote-camera component');

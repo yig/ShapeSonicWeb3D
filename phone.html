@@ -15,7 +15,8 @@
   <body>
     <h1>ShapeSonic: phone camera</h1>
     <p>This phone sends what its camera sees of your hands to the ShapeSonic page on your computer. Stand it where it sees your hands from a different side than the computer's camera.</p>
-    <!-- The whole phone side is webhands' mountRemoteCamera component (it reads ?host= from the link). -->
+    <!-- The whole phone side is webhands' mountRemoteCamera component (it reads ?host= from the link).
+         Used when this app is deployed over HTTPS; otherwise the QR code points to webhands' hosted copy. -->
     <div id="remote"></div>
     <script type="module">
       import { mountRemoteCamera } from '@ygingold/webhands3d';

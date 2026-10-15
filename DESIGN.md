@@ -20,7 +20,7 @@ Keep this document up to date when the implementation changes.
 ```sh
 npm install
 npm run dev          # http://localhost:5173/
-npm run dev:lan      # HTTPS on the local network: for a phone or a Meta Quest
+npm run dev:lan      # HTTPS on the local network: to open the app itself on a phone or a Meta Quest
 npm run build        # static site in dist/ (relative paths: host it anywhere)
 ```
 
@@ -29,9 +29,9 @@ hand, no camera needed), or **Start in headset** (shown only where immersive
 WebXR is available). Use headphones: the left hand plays in the left ear.
 Camera access and WebXR need a secure context: localhost or HTTPS.
 
-To add a phone as a camera, run `npm run dev:lan` (phones need HTTPS for their
-camera), open Menu → Hands → *Add a phone as a camera* on the computer, and
-scan the QR code with the phone. Both devices need internet access (PeerJS).
+To add a phone as a camera, open Menu → Hands → *Add a phone as a camera* on
+the computer and scan the QR code with the phone. Both devices need internet
+access (PeerJS), but not the same network, and plain `npm run dev` is enough.
 
 URL parameters, for demos and tests:
 
@@ -51,7 +51,7 @@ checkout of webhands, `npm link` it, or point the dependency at
 
 ```
 index.html               page: stage (video + canvas), camera thumbnails, top bar, menu, start overlay
-phone.html               the phone's page when it joins as a camera (webhands' mountRemoteCamera)
+phone.html               phone page for deployed HTTPS builds (webhands' mountRemoteCamera); see Cameras
 src/style.css            layout and theme tokens (light/dark)
 src/main.ts              app wiring: settings, shape loading, sources, placement, UI; hands → probe → audio
 src/sonify.ts            fingertips → per-hand levels (the paper's falloff table)
@@ -73,7 +73,7 @@ public/audio/            the sounds, copied from ../demo/audio
 test/                    vitest: geometry, sonification, loaders
 tools/smoke.mjs          headless Chrome end-to-end check (needs a running dev server)
 tools/bench.ts           octree build time, size and accuracy per model (Node, one thread)
-vite.config.ts           two pages; HTTPS for dev:lan; /shapesonic-info (the LAN address, for the QR code)
+vite.config.ts           two pages (index, phone); HTTPS for dev:lan
 ```
 
 ## Data flow
@@ -249,13 +249,20 @@ camera, so there is one code path:
   thumbnail.
 - **Phones** (*Add a phone as a camera*): webhands' `createRemoteCameraJoin`,
   created the first time that section is opened, because it registers with
-  the public PeerJS server. Its QR code points to `phone.html?host=<id>`, which
-  is webhands' `mountRemoteCamera`: the phone runs MediaPipe on its own camera
-  and sends landmarks (about 2 KB per frame) directly to the computer over
-  WebRTC. In development, the page is usually on `localhost`, which a phone
-  can't open, so the dev server reports the computer's LAN address at
-  `/shapesonic-info` (a small Vite plugin, as in webhands' own demo). Phones
-  stay connected when the source changes and rejoin the next tracker.
+  the public PeerJS server. Its QR code is a link to a phone page with the
+  computer's PeerJS id (`?host=<id>`). The page is webhands'
+  `mountRemoteCamera`: the phone runs MediaPipe on its own camera, finds the
+  computer through PeerJS by that id, and sends landmarks (about 2 KB per
+  frame) directly to it over WebRTC. Because PeerJS does the finding, the
+  phone page can be served from anywhere over HTTPS (phones need HTTPS for
+  their camera). By default it is webhands' published copy,
+  <https://yig.github.io/webhands3d/remote.html>, so a phone needs only
+  internet: no local HTTPS server, certificate warning or shared network. A
+  production build of this app served over HTTPS uses its own `phone.html`
+  instead (`phonePageUrl` in `main.ts`). The hosted page must speak the same
+  remote protocol version as the webhands3d this app was built with; a
+  mismatch fails to connect rather than misbehaving. Phones stay connected
+  when the source changes and rejoin the next tracker.
 - **Calibration**: the panel shows the lens (per camera), hand size, bone
   lengths, and camera positions. Camera positions: hold up one hand and move
   it through the space the cameras share for 12 s. That gives each camera's
@@ -381,11 +388,15 @@ npm run bench [-- leaf_mm models...]   # octree size, time and accuracy (one thr
   second fake camera joins the multi-camera tracker, its thumbnail plays, the
   list marks it uncalibrated, the panel offers camera-position calibration,
   and removing it removes the camera and thumbnail; switching the main camera
-  keeps tracking; the phone join registers with PeerJS and shows a
-  `phone.html?host=` link; the phone page renders; no console errors.
+  keeps tracking; the phone join registers with PeerJS and links to the
+  hosted phone page; a second browser page opens that link (with a fake
+  camera), clicks *Start & connect*, and joins the app over PeerJS and WebRTC
+  as a phone camera that streams frames; this app's own `phone.html` renders;
+  no console errors.
 
 Not automated: real hands. The fake cameras show no hands, so neither the
-camera-position calibration nor triangulation runs here, and no phone joins;
+camera-position calibration nor triangulation runs here, and no real phone
+joins (the PeerJS join itself is tested, with a browser page as the phone);
 there is no headset either. Manual checks: with a calibrated webcam, guidance gets louder
 toward the shape and contact plays one note per finger inside it; edges and
 corners of the cube pluck and ring; Place at hands; the drawn hands line up
@@ -405,8 +416,9 @@ bar counts them; and in a Quest, the same, plus the shape drawn in passthrough.
 - **The main camera can't be removed**, only switched: it defines the world
   frame the shape is placed in.
 - **Phones need internet** for the PeerJS introduction (the public server
-  sees peer ids and network addresses, not hand data). webhands accepts
-  `peerOptions` for a self-hosted PeerServer; the app doesn't expose that.
+  sees peer ids and network addresses, not hand data), and the default phone
+  page is on GitHub Pages. webhands accepts `peerOptions` for a self-hosted
+  PeerServer; the app doesn't expose that.
 - **Fingertip position.** MediaPipe's fingertip landmark is at the tip of the
   finger, not the pad; contact may begin a few millimetres "early".
 - **Headset**: untested on hardware. The menu is not reachable from inside the
