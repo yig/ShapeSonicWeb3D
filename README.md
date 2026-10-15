@@ -5,6 +5,9 @@ in 3D with [webhands](https://github.com/yig/webhands3d/) (`@ygingold/webhands3d
 tracking via WebXR (Meta Quest Browser). A mouse-driven virtual hand works
 without a camera.
 
+**Live:** <https://yig.github.io/ShapeSonicWeb3D/> (deployed from `main` by
+`.github/workflows/pages.yml`).
+
 ```sh
 npm install
 npm run dev        # http://localhost:5173/
