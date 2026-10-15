@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="ShapeSonic 3D: hear an invisible 3D shape with your hands, in the browser." />
+    <link rel="icon" href="data:," />
+    <title>ShapeSonic 3D</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="stage">
+      <video id="video" muted playsinline hidden></video>
+    </div>
+
+    <header id="topbar">
+      <button id="menuButton" aria-haspopup="dialog" aria-controls="menu" title="Menu (M)">☰ Menu</button>
+      <button id="showButton" aria-pressed="false" title="Show the shape (S)">Show shape</button>
+      <button id="placeButton" title="Place the shape between your hands in 3 seconds (P)">Place at hands</button>
+      <span id="trackingStatus" role="status" aria-live="polite"></span>
+    </header>
+
+    <div id="toast" role="status" aria-live="polite" hidden></div>
+
+    <aside id="menu" role="dialog" aria-label="Menu" hidden>
+      <div class="menu-head">
+        <h1>ShapeSonic 3D</h1>
+        <button id="closeMenu" aria-label="Close menu" title="Close (Esc)">✕</button>
+      </div>
+
+      <section>
+        <h2>Shape</h2>
+        <div id="demos" class="demos" role="radiogroup" aria-label="Demo shapes"></div>
+        <label class="file-button">Load model…<input id="fileInput" type="file" accept=".obj,.stl,.ply,.glb,.gltf" /></label>
+        <label class="row"><span>Size <output id="sizeOut"></output></span><input id="size" type="range" min="10" max="60" step="1" /></label>
+        <label class="row check"><input id="keepUnits" type="checkbox" /><span>Loaded models keep their own units</span></label>
+        <p id="shapeStatus" class="status" aria-live="polite"></p>
+      </section>
+
+      <section>
+        <h2>Display</h2>
+        <label class="row check"><input id="showShape" type="checkbox" /><span>Show shape</span></label>
+        <label class="row check"><input id="showFeatures" type="checkbox" checked /><span>Show edges and corners</span></label>
+        <label class="row"><span>View</span>
+          <select id="viewMode"><option value="camera">From the camera</option><option value="orbit">Orbit (drag to turn)</option></select>
+        </label>
+        <label class="row check"><input id="mirror" type="checkbox" checked /><span>Mirror the camera view</span></label>
+      </section>
+
+      <section>
+        <h2>Edges and corners</h2>
+        <label class="row"><span>Sharp-edge angle <output id="angleOut"></output></span><input id="angle" type="range" min="5" max="90" step="1" /></label>
+        <label class="row"><span>Sound range <output id="rangeOut"></output></span><input id="range" type="range" min="1" max="6" step="0.5" /></label>
+      </section>
+
+      <section>
+        <h2>Sound</h2>
+        <label class="row"><span>Volume</span><input id="volume" type="range" min="0" max="1" step="0.01" /></label>
+        <p id="audioStatus" class="status"></p>
+      </section>
+
+      <section>
+        <h2>Hands</h2>
+        <label class="row"><span>Tracking</span>
+          <select id="source"><option value="camera">Webcam</option><option value="mouse">Mouse (virtual hand)</option><option value="xr">Headset (WebXR)</option></select>
+        </label>
+        <div id="cameraControls">
+          <label class="row"><span>Camera</span><select id="cameraSelect"></select></label>
+          <details id="calibrationDetails">
+            <summary>Calibrate the camera and hands</summary>
+            <p class="hint">Calibration makes distances right. It is saved for this camera in this browser.</p>
+            <div id="calibration"></div>
+          </details>
+        </div>
+        <p id="mouseHint" class="hint" hidden>Hold the left button to put your right hand in (Shift: left hand). The wheel moves the hand nearer or farther. Right-drag turns the orbit view.</p>
+        <button id="enterXR" hidden>Enter headset</button>
+        <p id="sourceStatus" class="status"></p>
+      </section>
+
+      <section>
+        <h2>Placement</h2>
+        <div class="buttons">
+          <button id="placeMenuButton">Place at hands in 3 s</button>
+          <button id="resetPlacement">Reset</button>
+          <button id="turn">Turn 90°</button>
+        </div>
+      </section>
+
+      <p class="hint">Keys: M menu, S show shape, P place at hands, Esc close. Use headphones: your left hand plays in your left ear.</p>
+    </aside>
+
+    <div id="start" class="overlay">
+      <div class="card">
+        <h1>ShapeSonic 3D</h1>
+        <p>An invisible 3D shape floats in front of you. Explore it with your hands and listen: a soft sound guides you toward it, each fingertip plays its own note inside it, and edges and corners pluck and ring.</p>
+        <p class="hint">Use headphones. Your left hand plays in your left ear.</p>
+        <div class="buttons">
+          <button id="startCamera" class="primary">Start with webcam</button>
+          <button id="startMouse">Start with mouse</button>
+          <button id="startXR" hidden>Start in headset</button>
+        </div>
+        <p id="startStatus" class="status" aria-live="polite"></p>
+      </div>
+    </div>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
