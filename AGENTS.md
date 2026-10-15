@@ -6,4 +6,6 @@ UI:
 
 * A toggle to show the shape. By default the shape should be hidden. (Its name should only be visible inside the pop-up menu.) Visualize detected corners and edges.
 
-Save and maintain a document describing the implementation's design and architecture.
+Save and maintain a document describing the implementation's design and architecture. Commit changes as you work.
+
+If changes are needed to `webhands`, we can make them. We also develop that library.

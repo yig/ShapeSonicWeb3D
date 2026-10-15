@@ -22,8 +22,4 @@ export default defineConfig({
     fs: { allow: ['..'] },
   },
   worker: { format: 'es' },
-  test: {
-    include: ['test/**/*.test.ts'],
-    testTimeout: 120000,
-  },
 });
