@@ -12,7 +12,7 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HAND_BONES, NUM_JOINTS } from 'webhands';
+import { HAND_BONES, NUM_JOINTS } from '@ygingold/webhands3d';
 import type { Shape } from '../geometry/shape';
 import { FINGERTIPS, type WorldHand } from './hands';
 import type { Placement } from './placement';

@@ -1,7 +1,7 @@
 // App wiring: settings, shape loading, hand sources, placement, and the
 // hands → probe → audio path, which runs synchronously on every hand frame.
 
-import { createCalibrationPanel, listCameras, type CalibrationPanel } from 'webhands';
+import { createCalibrationPanel, listCameras, type CalibrationPanel } from '@ygingold/webhands3d';
 import { CameraHands, FINGERTIPS, virtualHand, XRHands, type WorldHand } from './app/hands';
 import { loadModelFile } from './app/loaders';
 import { defaultPlacement, toShape } from './app/placement';

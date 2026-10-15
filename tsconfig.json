@@ -9,8 +9,7 @@
     "noUnusedParameters": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "types": ["vite/client", "webxr", "node"],
-    "paths": { "webhands": ["../webhands/src/index.ts"] }
+    "types": ["vite/client", "webxr", "node"]
   },
   "include": ["src", "test", "tools", "vite.config.ts"]
 }

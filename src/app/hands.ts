@@ -15,7 +15,7 @@ import {
   openCamera,
   type CameraHandle,
   type Hand3D,
-} from 'webhands';
+} from '@ygingold/webhands3d';
 
 /** Joint indices of the fingertips, thumb to little finger (= pentatonic slots C D E G A). */
 export const FINGERTIPS = [4, 8, 12, 16, 20];

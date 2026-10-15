@@ -1,7 +1,7 @@
 # ShapeSonic 3D for the web
 
 Hear an invisible 3D shape with your hands, in the browser. Hands are tracked
-in 3D with [webhands](../webhands): from a webcam, or from a headset's hand
+in 3D with [webhands](https://github.com/yig/webhands3d/) (`@ygingold/webhands3d`): from a webcam, or from a headset's hand
 tracking via WebXR (Meta Quest Browser). A mouse-driven virtual hand works
 without a camera.
 

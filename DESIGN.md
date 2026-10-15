@@ -2,7 +2,9 @@
 
 A browser app of ShapeSonic (Huang, Hanocka, Siu, Gingold, SIGGRAPH Asia 2023;
 `../paper/main.tex`). An invisible 3D shape floats in front of the user. Their
-hands are tracked in 3D, in metres, with `../webhands`: from an ordinary
+hands are tracked in 3D, in metres, with webhands
+([`@ygingold/webhands3d`](https://www.npmjs.com/package/@ygingold/webhands3d),
+<https://github.com/yig/webhands3d/>): from an ordinary
 webcam, or from a headset's own hand tracking through WebXR (the paper's
 setup was a Meta Quest). Each fingertip is probed against the shape, and the
 user hears the paper's guidance, contact, edge and corner sounds. The iOS app
@@ -35,12 +37,10 @@ URL parameters, for demos and tests:
 | `view=camera\|orbit` | Initial view. |
 | `start=mouse\|camera` | Skip the start overlay. No sound plays (browsers need a click to start audio), so this is for screenshots and tests. |
 
-**webhands** is imported from its source (`../webhands/src`) through a Vite
-alias (`vite.config.ts`, and `paths` in `tsconfig.json`), so changes there are
-picked up without rebuilding its `dist/`, which was out of date. Its runtime
-dependency `@mediapipe/tasks-vision` is a dependency here too, and Vite's
-`dedupe` resolves it (and three.js) from this project. Once webhands is
-published, replace the alias with the package.
+**webhands** is the npm package `@ygingold/webhands3d` (an ordinary
+dependency; it brings `@mediapipe/tasks-vision`). To develop against a local
+checkout of webhands, `npm link` it, or point the dependency at
+`file:../webhands` and rebuild its `dist/` after changes.
 
 ## Files
 
@@ -329,11 +329,12 @@ with the video; and in a Quest, the same, plus the shape drawn in passthrough.
 - **Monocular depth.** One webcam measures depth worst. webhands' target after
   calibration is ±10% at arm's length (its simulations give about 2% for the
   wrist; real hands have not been measured yet), so near the surface the
-  contact boundary can flicker with tracking noise. webhands' multi-camera tracker
-  (`MultiViewHandTracker`, with phones joining over WebRTC) triangulates and is
-  much more accurate; adding it as a source needs its signaling server (a Vite
-  plugin in webhands) and the camera-management UI from its `cameras.html`
-  demo.
+  contact boundary can flicker with tracking noise. webhands' multi-camera
+  tracker (`MultiViewHandTracker`) triangulates from several cameras and is
+  much more accurate. Phones can join it by QR code through PeerJS
+  (`createRemoteCameraJoin`), with no server of our own. Adding it as a fourth
+  source would mean a camera list in the menu and the panel's camera-position
+  calibration step.
 - **Fingertip position.** MediaPipe's fingertip landmark is at the tip of the
   finger, not the pad; contact may begin a few millimetres "early".
 - **Headset**: untested on hardware. The menu is not reachable from inside the
@@ -345,5 +346,5 @@ with the video; and in a Quest, the same, plus the shape drawn in passthrough.
   as in the paper. Manual labels (the paper used Blender for failures) are not
   supported. A sidecar file of edges and corners would be a natural extension.
 - The 34 s loops (1.3 MB each) dominate the download; the JavaScript bundle
-  (three.js, MediaPipe's wrapper) is about 260 kB gzipped, and MediaPipe's
+  (three.js, webhands, MediaPipe's wrapper) is about 270 kB gzipped, and MediaPipe's
   WASM and model are fetched from a CDN when the webcam starts.
