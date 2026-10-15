@@ -148,13 +148,15 @@ check(/fps/.test(await cam.textContent('#trackingStatus')), 'switching the main 
 await cam.click('#phoneDetails summary');
 await cam.waitForFunction(() => /Code |can't join/.test(document.querySelector('.webhands-join')?.shadowRoot?.textContent ?? ''), null, { timeout: 20000 }).catch(() => {});
 const joinText = await cam.evaluate(() => document.querySelector('.webhands-join')?.shadowRoot?.textContent ?? '');
-check(/Code /.test(joinText) && /https:\/\/yig\.github\.io\/webhands3d\/remote\.html\?host=/.test(joinText), `the phone QR code points to the hosted phone page (${joinText.match(/Code \S+|can't join[^.]*/)?.[0] ?? 'no status'})`);
+// The QR link: webhands' hosted phone page, or this site's own phone.html when the app itself is served over HTTPS.
+const phonePage = base.startsWith('https:') ? new URL('phone.html', base).href : 'https://yig.github.io/webhands3d/remote.html';
+check(/Code /.test(joinText) && joinText.includes(`${phonePage}?host=`), `the phone QR code points to ${phonePage} (${joinText.match(/Code \S+|can't join[^.]*/)?.[0] ?? 'no status'})`);
 
-// A "phone": another page opens the QR link (webhands' hosted phone page, fake camera) and joins over PeerJS.
-const link = joinText.match(/https:\/\/\S+?host=webhands3d-[0-9a-f]+/)?.[0];
+// A "phone": another page opens the QR link (with a fake camera) and joins over PeerJS.
+const link = joinText.match(/https?:\/\/\S+?host=webhands3d-[0-9a-f]+/)?.[0];
 if (link) {
   const remote = await browser.newPage();
-  remote.on('pageerror', (e) => errors.push(`hosted phone page: ${e.message}`));
+  remote.on('pageerror', (e) => errors.push(`phone page: ${e.message}`));
   await remote.goto(link);
   await remote.locator('button', { hasText: 'Start & connect' }).click({ timeout: 20000 }).catch(() => {});
   await cam.waitForFunction(() => window.shapesonic.rig.cameras.some((c) => c.kind === 'phone'), null, { timeout: 45000 }).catch(() => {});

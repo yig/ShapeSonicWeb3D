@@ -24,6 +24,13 @@ npm run dev:lan      # HTTPS on the local network: to open the app itself on a p
 npm run build        # static site in dist/ (relative paths: host it anywhere)
 ```
 
+**Live** at <https://yig.github.io/ShapeSonicWeb3D/> (repository
+<https://github.com/yig/ShapeSonicWeb3D>). Every push to `main` runs
+`.github/workflows/pages.yml`: `npm ci`, the unit tests, the build, and a
+deployment of `dist/` to GitHub Pages. The live site is a production build
+over HTTPS, so its phone QR code uses its own `phone.html`. To check it end to
+end: `npm run smoke -- https://yig.github.io/ShapeSonicWeb3D/`.
+
 Open the page and choose **Start with webcam**, **Start with mouse** (a virtual
 hand, no camera needed), or **Start in headset** (shown only where immersive
 WebXR is available). Use headphones: the left hand plays in the left ear.
@@ -382,7 +389,8 @@ npm run bench [-- leaf_mm models...]   # octree size, time and accuracy (one thr
   display size.
 - `test/loaders.test.ts`: OBJ, binary STL (welded into a closed box), ASCII
   PLY with quads, GLB with a node transform; unknown formats rejected.
-- `tools/smoke.mjs` (also run against `vite preview` of the production build):
+- `tools/smoke.mjs` (also run against `vite preview` of the production build,
+  and against the live site):
   the cube is built in workers with the expected features; the top bar doesn't
   name the shape and the shape starts hidden; virtual-hand levels (contact
   just inside, guidance = e⁻² at 20 cm, edge and corner at a corner, left hand
@@ -394,7 +402,8 @@ npm run bench [-- leaf_mm models...]   # octree size, time and accuracy (one thr
   list marks it uncalibrated, the panel offers camera-position calibration,
   and removing it removes the camera and thumbnail; switching the main camera
   keeps tracking; the phone join registers with PeerJS and links to the
-  hosted phone page; a second browser page opens that link (with a fake
+  hosted phone page (or, against an HTTPS deployment, the site's own
+  `phone.html`); a second browser page opens that link (with a fake
   camera), clicks *Start & connect*, and joins the app over PeerJS and WebRTC
   as a phone camera that streams frames; this app's own `phone.html` renders;
   no console errors.
