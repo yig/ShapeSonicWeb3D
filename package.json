@@ -1,0 +1,30 @@
+{
+  "name": "shapesonic-web3d",
+  "private": true,
+  "version": "0.1.0",
+  "description": "ShapeSonic in 3D in the browser: webcam or WebXR hand tracking, an octree SDF and sonification",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:lan": "SHAPESONIC_LAN=1 vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "smoke": "node tools/smoke.mjs"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^1.1.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/three": "^0.186.0",
+    "@types/webxr": "^0.5.24",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "playwright-core": "^1.64.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
+  }
+}
