@@ -79,10 +79,17 @@ export function detectFeatures(mesh: Mesh, sharpAngleDeg: number): Features {
   return { edges: Float32Array.from(edges), corners: Float32Array.from(corners) };
 }
 
+// Numeric cell keys: cell coordinates offset into [0, KEY), i.e. ±80 m at 2 cm cells.
+const KEY = 8192, OFF = KEY / 2;
+const cellKey = (i: number, j: number, k: number) => ((i + OFF) * KEY + (j + OFF)) * KEY + (k + OFF);
+
 /** Uniform hash grid of segments or points, for range-limited nearest-distance queries. */
 export class FeatureGrid {
-  private readonly cells = new Map<string, number[]>();
+  private readonly cells = new Map<number, number[]>();
   private readonly count: number;
+  /** Bounding box of the features, for an early out. */
+  private readonly lo = [Infinity, Infinity, Infinity];
+  private readonly hi = [-Infinity, -Infinity, -Infinity];
 
   /** `pts`: 6 numbers per segment, or 3 per point. */
   constructor(
@@ -96,10 +103,14 @@ export class FeatureGrid {
     for (let s = 0; s < this.count; s++) {
       const o = stride * s;
       const e = segments ? o + 3 : o;
+      for (let a = 0; a < 3; a++) {
+        this.lo[a] = Math.min(this.lo[a], pts[o + a], pts[e + a]);
+        this.hi[a] = Math.max(this.hi[a], pts[o + a], pts[e + a]);
+      }
       for (let i = f(Math.min(pts[o], pts[e])); i <= f(Math.max(pts[o], pts[e])); i++)
         for (let j = f(Math.min(pts[o + 1], pts[e + 1])); j <= f(Math.max(pts[o + 1], pts[e + 1])); j++)
           for (let k = f(Math.min(pts[o + 2], pts[e + 2])); k <= f(Math.max(pts[o + 2], pts[e + 2])); k++) {
-            const key = `${i},${j},${k}`;
+            const key = cellKey(i, j, k);
             const list = this.cells.get(key);
             if (list) list.push(s);
             else this.cells.set(key, [s]);
@@ -129,6 +140,12 @@ export class FeatureGrid {
   /** Distance to the nearest feature, or Infinity if none is within maxDistance. */
   nearest(x: number, y: number, z: number, maxDistance: number): number {
     if (!this.count) return Infinity;
+    const { lo, hi } = this;
+    if (
+      x < lo[0] - maxDistance || y < lo[1] - maxDistance || z < lo[2] - maxDistance ||
+      x > hi[0] + maxDistance || y > hi[1] + maxDistance || z > hi[2] + maxDistance
+    )
+      return Infinity;
     let best = maxDistance * maxDistance;
     let found = false;
     const r = Math.ceil(maxDistance / this.cell);
@@ -142,7 +159,7 @@ export class FeatureGrid {
       for (let i = ci - r; i <= ci + r; i++)
         for (let j = cj - r; j <= cj + r; j++)
           for (let k = ck - r; k <= ck + r; k++) {
-            const list = this.cells.get(`${i},${j},${k}`);
+            const list = this.cells.get(cellKey(i, j, k));
             if (!list) continue;
             for (const s of list) {
               const d2 = this.dist2(s, x, y, z);
